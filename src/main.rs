@@ -3,7 +3,7 @@ use flate2::read::ZlibDecoder;
 use std::env;
 use std::fs;
 use std::io;
-use std::io::{Read, Write};
+use std::io::Read;
 
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -56,10 +56,7 @@ fn get_object_data(
     let object_content = get_object_by_hash(object_hash)?;
     let object = get_decompressed_object(&object_content)?;
     let info = getter_fn(&object)?;
-
     print!("{info}");
-    io::stdout().flush()?;
-
     Ok(())
 }
 
