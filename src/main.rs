@@ -40,16 +40,16 @@ fn handle_cat_file_command(args: &[String]) {
 
 fn handle_object_info(flag: &str, object_hash: &str) -> anyhow::Result<()> {
     match flag {
-        "-p" => get_object_data(object_hash, get_object_content)?,
-        "-e" => get_object_data(object_hash, get_object_exists)?,
-        "-t" => get_object_data(object_hash, get_object_type)?,
-        "-s" => get_object_data(object_hash, get_object_size)?,
+        "-p" => display_object_info(object_hash, get_object_content)?,
+        "-e" => display_object_info(object_hash, get_object_exists)?,
+        "-t" => display_object_info(object_hash, get_object_type)?,
+        "-s" => display_object_info(object_hash, get_object_size)?,
         _ => println!("usage: git cat-file (-p | -e | -t | -s) <object>"),
     };
     Ok(())
 }
 
-fn get_object_data(
+fn display_object_info(
     object_hash: &str,
     getter_fn: fn(object: &str) -> anyhow::Result<String>,
 ) -> anyhow::Result<()> {
@@ -86,7 +86,7 @@ fn get_object_exists(_: &str) -> anyhow::Result<String> {
 }
 
 fn get_object_type(object: &str) -> anyhow::Result<String> {
-    Ok(object.split(' ').take(1).collect::<String>())
+    Ok(object.split(' ').take(1).collect())
 }
 
 fn get_object_size(object: &str) -> anyhow::Result<String> {
