@@ -51,11 +51,11 @@ fn handle_object_info(flag: &str, object_hash: &str) -> anyhow::Result<()> {
 
 fn get_object_data(
     object_hash: &str,
-    getter: fn(object: &str) -> anyhow::Result<String>,
+    getter_fn: fn(object: &str) -> anyhow::Result<String>,
 ) -> anyhow::Result<()> {
     let object_content = get_object_by_hash(object_hash)?;
     let object = get_decompressed_object(&object_content)?;
-    let info = getter(&object)?;
+    let info = getter_fn(&object)?;
 
     print!("{info}");
     io::stdout().flush()?;
