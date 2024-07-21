@@ -3,7 +3,7 @@ mod objects;
 mod utils;
 
 use crate::commands::cat_file::CatObjectFlags;
-use crate::commands::{cat_file, hash_object, init, ls_tree};
+use crate::commands::{cat_file, hash_object, init, ls_tree, write_tree};
 use clap::{ArgGroup, Parser, Subcommand};
 use std::env;
 use std::path::PathBuf;
@@ -21,7 +21,7 @@ enum Command {
     #[clap(group(ArgGroup::new("info").required(true).args(&["object_content", "object_exists", "object_type", "object_size"])))]
     CatFile {
         #[clap(short = 'p')]
-        object_content: bool,
+        pretty_print: bool,
         #[clap(short = 'e')]
         object_exists: bool,
         #[clap(short = 't')]
@@ -43,6 +43,7 @@ enum Command {
 
         object_hash: String,
     },
+    WriteTree,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -60,14 +61,14 @@ fn process(args: &[String]) -> anyhow::Result<()> {
             object_hash,
             object_exists,
             object_type,
-            object_content,
+            pretty_print,
         } => cat_file::handle(
             &object_hash,
             CatObjectFlags {
                 object_size,
                 object_exists,
                 object_type,
-                object_content,
+                pretty_print,
             },
         )?,
         Command::HashObject { write, file } => hash_object::handle(&file, write)?,
@@ -75,6 +76,7 @@ fn process(args: &[String]) -> anyhow::Result<()> {
             name_only,
             object_hash,
         } => ls_tree::handle(&object_hash, name_only)?,
+        Command::WriteTree => write_tree::handle()?,
     };
     Ok(())
 }

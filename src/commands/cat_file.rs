@@ -4,7 +4,7 @@ use std::io;
 use std::io::BufRead;
 
 pub struct CatObjectFlags {
-    pub object_content: bool,
+    pub pretty_print: bool,
     pub object_exists: bool,
     pub object_type: bool,
     pub object_size: bool,
@@ -15,8 +15,7 @@ pub fn handle(object_hash: &str, flags: CatObjectFlags) -> anyhow::Result<()> {
 
     match flags {
         CatObjectFlags {
-            object_content: true,
-            ..
+            pretty_print: true, ..
         } => display_object(&mut object)?,
         CatObjectFlags {
             object_exists: true,
