@@ -1,5 +1,7 @@
 mod commands;
 mod objects;
+mod utils;
+
 use crate::commands::cat_file::CatObjectFlags;
 use crate::commands::{cat_file, hash_object, init, ls_tree};
 use clap::{ArgGroup, Parser, Subcommand};

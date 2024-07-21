@@ -1,3 +1,4 @@
+use crate::utils::from_bytes_with_nul;
 use anyhow::bail;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
@@ -69,7 +70,7 @@ impl Object<()> {
         let mut buf = Vec::new();
         r.read_until(0x00, &mut buf)?;
 
-        let head = String::from_utf8(buf[..buf.len() - 1].to_owned())?;
+        let head = from_bytes_with_nul(&buf)?;
         let Some((kind, size)) = head.split_once(' ') else {
             bail!("object head signature is incorrect")
         };
