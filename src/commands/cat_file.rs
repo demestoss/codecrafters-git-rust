@@ -1,47 +1,49 @@
 use crate::objects;
-use anyhow::anyhow;
-use std::fs;
 
-pub fn handle(args: &[String]) {
-    match args {
-        [flag, object] => match handle_object_info(flag, object) {
-            Err(e) => eprintln!("incorrect object: {e}"),
-            _ => {}
-        },
-        _ => println!("usage: git cat-file (-p | -e | -t | -s) <object>"),
-    }
+pub struct CatObjectFlags {
+    pub object_content: bool,
+    pub object_exists: bool,
+    pub object_type: bool,
+    pub object_size: bool,
 }
 
-fn handle_object_info(flag: &str, object_hash: &str) -> anyhow::Result<()> {
-    match flag {
-        "-p" => display_object_info(object_hash, get_object_content)?,
-        "-e" => display_object_info(object_hash, get_object_exists)?,
-        "-t" => display_object_info(object_hash, get_object_type)?,
-        "-s" => display_object_info(object_hash, get_object_size)?,
-        _ => println!("usage: git cat-file (-p | -e | -t | -s) <object>"),
+pub fn handle(object_hash: &str, flags: CatObjectFlags) {
+    let result = match flags {
+        CatObjectFlags {
+            object_content: true,
+            ..
+        } => display_object_info(object_hash, get_object_content),
+        CatObjectFlags {
+            object_exists: true,
+            ..
+        } => display_object_info(object_hash, get_object_exists),
+        CatObjectFlags {
+            object_type: true, ..
+        } => display_object_info(object_hash, get_object_type),
+        CatObjectFlags {
+            object_size: true, ..
+        } => display_object_info(object_hash, get_object_size),
+        _ => {
+            println!("usage: git cat-file (-p | -e | -t | -s) <object>");
+            Ok(())
+        }
     };
-    Ok(())
+
+    match result {
+        Err(e) => eprintln!("incorrect object: {e}"),
+        _ => {}
+    }
 }
 
 fn display_object_info(
     object_hash: &str,
     getter_fn: fn(object: &str) -> anyhow::Result<String>,
 ) -> anyhow::Result<()> {
-    let object_content = get_object_by_hash(object_hash)?;
-    let object = objects::get_decompressed(&object_content)?;
+    let object_content = objects::get_object_by_hash(object_hash)?;
+    let object = objects::decompress(&object_content)?;
     let info = getter_fn(&object)?;
     print!("{info}");
     Ok(())
-}
-
-fn get_object_by_hash(hash: &str) -> anyhow::Result<Vec<u8>> {
-    if hash.len() != 40 {
-        return Err(anyhow!("incorrect object hash"));
-    }
-
-    let path = objects::get_path(hash);
-    let object_content = fs::read(path)?;
-    Ok(object_content)
 }
 
 fn get_object_exists(_: &str) -> anyhow::Result<String> {
