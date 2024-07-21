@@ -19,4 +19,5 @@ flate2 = "1.0"                                                     # gzip compre
 sha1 = "0.10.1"                                                    # hashing
 hex = "0.4.3"                                                      # working with hash output
 anyhow = "1.0.59"                                                  # error handling
-thiserror = "1.0.32"                                               # error handling
+thiserror = "1.0.32"
+object = "0.36.1"                                               # error handling

@@ -1,7 +1,7 @@
 mod commands;
 mod objects;
 use crate::commands::cat_file::CatObjectFlags;
-use crate::commands::{cat_file, hash_object, init};
+use crate::commands::{cat_file, hash_object, init, ls_tree};
 use clap::{ArgGroup, Parser, Subcommand};
 use std::env;
 use std::path::PathBuf;
@@ -35,6 +35,12 @@ enum Command {
 
         file: PathBuf,
     },
+    LsTree {
+        #[clap(long = "name-only")]
+        name_only: bool,
+
+        object_hash: String,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -61,8 +67,12 @@ fn process(args: &[String]) -> anyhow::Result<()> {
                 object_type,
                 object_content,
             },
-        ),
+        )?,
         Command::HashObject { write, file } => hash_object::handle(&file, write)?,
+        Command::LsTree {
+            name_only,
+            object_hash,
+        } => ls_tree::handle(&object_hash, name_only)?,
     };
     Ok(())
 }

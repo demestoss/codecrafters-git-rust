@@ -1,38 +1,117 @@
-use crate::objects;
-use anyhow::anyhow;
+use anyhow::bail;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
+use sha1::{Digest, Sha1};
+use std::fmt::{Display, Formatter};
 use std::fs;
-use std::io::{Read, Write};
+use std::io::prelude::*;
+use std::io::BufReader;
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
-pub fn get_object_dir_path(hash: &str) -> String {
-    ".git/objects/".to_string() + &hash[..2]
+pub fn get_object_dir_path(hash: &str) -> PathBuf {
+    Path::new(".git/objects").join(&hash[..2]).to_owned()
 }
 
-pub fn get_object_path(hash: &str) -> String {
-    get_object_dir_path(hash) + "/" + &hash[2..]
+pub fn get_object_path(hash: &str) -> PathBuf {
+    let dir = get_object_dir_path(hash);
+    dir.join(&hash[2..])
 }
 
-pub fn get_object_by_hash(hash: &str) -> anyhow::Result<Vec<u8>> {
-    if hash.len() != 40 {
-        return Err(anyhow!("incorrect object hash"));
+#[derive(Debug)]
+pub enum ObjectKind {
+    Blob,
+    Tree,
+    Commit,
+}
+
+impl FromStr for ObjectKind {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "blob" => Ok(ObjectKind::Blob),
+            "tree" => Ok(ObjectKind::Tree),
+            "commit" => Ok(ObjectKind::Commit),
+            _ => bail!("unknown object type: {s}"),
+        }
+    }
+}
+
+impl Display for ObjectKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ObjectKind::Tree => write!(f, "tree"),
+            ObjectKind::Blob => write!(f, "blob"),
+            ObjectKind::Commit => write!(f, "commit"),
+        }
+    }
+}
+
+pub struct Object<R> {
+    pub kind: ObjectKind,
+    pub size: u64,
+    pub reader: R,
+}
+
+impl Object<()> {
+    pub fn read(hash: &str) -> anyhow::Result<Object<impl BufRead>> {
+        if hash.len() != 40 {
+            bail!("incorrect object hash");
+        }
+
+        let path = get_object_path(hash);
+        let file = fs::File::open(path)?;
+
+        let d = ZlibDecoder::new(file);
+        let mut r = BufReader::new(d);
+        let mut buf = Vec::new();
+        r.read_until(0x00, &mut buf)?;
+
+        let head = String::from_utf8(buf[..buf.len() - 1].to_owned())?;
+        let Some((kind, size)) = head.split_once(' ') else {
+            bail!("object head signature is incorrect")
+        };
+
+        let kind = ObjectKind::from_str(kind)?;
+        let size = size.parse::<u64>()?;
+        let r = r.take(size);
+
+        Ok(Object {
+            kind,
+            size,
+            reader: r,
+        })
+    }
+}
+
+pub struct ObjectWriter<W: Write> {
+    hasher: Sha1,
+    writer: ZlibEncoder<W>,
+}
+
+impl<W: Write> ObjectWriter<W> {
+    pub fn new(w: W) -> Self {
+        let writer = ZlibEncoder::new(w, Compression::default());
+        let hasher = Sha1::new();
+        ObjectWriter { writer, hasher }
     }
 
-    let path = objects::get_object_path(hash);
-    let object_content = fs::read(path)?;
-    Ok(object_content)
+    pub fn finalize(&mut self) -> anyhow::Result<String> {
+        let output = self.hasher.finalize_reset();
+        Ok(hex::encode(output))
+    }
 }
 
-pub fn decompress(object_content: &[u8]) -> anyhow::Result<String> {
-    let mut d = ZlibDecoder::new(object_content);
-    let mut str = String::new();
-    d.read_to_string(&mut str)?;
-    Ok(str)
-}
+impl<W: Write> Write for ObjectWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let n = self.writer.write(buf)?;
+        self.hasher.update(&buf[..n]);
+        Ok(n)
+    }
 
-pub fn compress(object: &str) -> anyhow::Result<Vec<u8>> {
-    let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
-    encoder.write_all(object.as_bytes())?;
-    Ok(encoder.finish()?)
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.writer.flush()
+    }
 }
