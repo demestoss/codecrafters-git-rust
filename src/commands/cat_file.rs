@@ -40,7 +40,12 @@ fn display_object(object: &mut Object<impl BufRead>) -> anyhow::Result<()> {
                 println!("{tree_object_item}");
             }
         }
-        _ => {
+        ObjectKind::Blob => {
+            let stdout = io::stdout();
+            let mut stdout = stdout.lock();
+            io::copy(&mut object.reader, &mut stdout)?;
+        }
+        ObjectKind::Commit => {
             let stdout = io::stdout();
             let mut stdout = stdout.lock();
             io::copy(&mut object.reader, &mut stdout)?;
