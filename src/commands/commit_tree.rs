@@ -1,5 +1,5 @@
 use crate::objects::{Object, ObjectKind};
-use anyhow::bail;
+use anyhow::{bail, Context};
 use std::io::{Cursor, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -18,7 +18,8 @@ pub fn handle(
     }
 
     let mut buf = Vec::new();
-    generate_commit_object(tree_hash, parent_hash, message, &mut buf)?;
+    generate_commit_object(tree_hash, parent_hash, message, &mut buf)
+        .context("create commit object content")?;
 
     let object = Object {
         kind: ObjectKind::Commit,
@@ -26,7 +27,9 @@ pub fn handle(
         reader: Cursor::new(buf),
     };
 
-    let hash = object.write_to_objects()?;
+    let hash = object
+        .write_to_objects()
+        .context("write .git/objects commit blob")?;
     let hex_hash = hex::encode(hash);
 
     println!("{hex_hash}");

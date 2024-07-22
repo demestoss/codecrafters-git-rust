@@ -1,6 +1,6 @@
 use crate::objects::{Object, ObjectHash, ObjectKind};
 use crate::utils::from_bytes_with_nul;
-use anyhow::bail;
+use anyhow::{bail, Context};
 use std::fmt::{Display, Formatter};
 use std::io::prelude::*;
 
@@ -13,13 +13,17 @@ pub fn handle(object_hash: &str, name_only: bool) -> anyhow::Result<()> {
         }
         ObjectKind::Commit => {
             let mut buf = String::new();
-            object.reader.read_line(&mut buf)?;
+            object
+                .reader
+                .read_line(&mut buf)
+                .context("read first line in commit file")?;
 
             let Some((_, tree_hash)) = buf.split_once(' ') else {
                 bail!("error: commit file signature is incorrect")
             };
 
-            let mut object = Object::read_from_objects(tree_hash)?;
+            let mut object =
+                Object::read_from_objects(tree_hash).context("read .git/objects tree object")?;
             display_tree(&mut object, name_only)?;
         }
         _ => println!("error: not a tree object"),
@@ -63,7 +67,9 @@ impl TreeObjectItem {
     pub(crate) fn read(reader: &mut impl BufRead) -> anyhow::Result<TreeObjectItem> {
         let TreeObjectItemRaw { mode, name, hash } = TreeObjectItemRaw::read(reader)?;
 
-        let object = Object::read_from_objects(&hex::encode(&hash))?;
+        let hex_hash = hex::encode(&hash);
+        let object = Object::read_from_objects(&hex_hash)
+            .with_context(|| format!("read .git/objects file with hash {hex_hash}"))?;
 
         Ok(TreeObjectItem {
             mode,
@@ -101,15 +107,19 @@ struct TreeObjectItemRaw {
 impl TreeObjectItemRaw {
     fn read(reader: &mut impl BufRead) -> anyhow::Result<Self> {
         let mut head = Vec::new();
-        reader.read_until(0x00, &mut head)?;
-        let head = from_bytes_with_nul(&head)?;
+        reader
+            .read_until(0x00, &mut head)
+            .context(".git/objects read tree object item head")?;
+        let head = from_bytes_with_nul(&head).context("parse tree object item head")?;
 
         let Some((mode, name)) = head.split_once(' ') else {
-            bail!("tree item head signature is incorrect")
+            bail!(".git/objects tree object item head signature is incorrect '{head}'")
         };
 
         let mut hash = [0; 20];
-        reader.read_exact(&mut hash)?;
+        reader
+            .read_exact(&mut hash)
+            .with_context(|| format!(".git/objects incorect hash signature {hash:?}"))?;
 
         Ok(Self {
             hash,

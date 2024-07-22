@@ -1,5 +1,6 @@
 use crate::objects::{Object, ObjectHash, ObjectKind};
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
+use std::fmt::format;
 use std::fs;
 use std::fs::Metadata;
 use std::io::prelude::*;
@@ -25,26 +26,30 @@ fn write_tree(file_path: &Path) -> anyhow::Result<ObjectHash> {
         reader: Cursor::new(buf),
     };
 
-    let hash = object.write_to_objects()?;
+    let hash = object
+        .write_to_objects()
+        .context("write to .git/objects dir")?;
     Ok(hash)
 }
 
 fn write_blob(file_path: &Path) -> anyhow::Result<ObjectHash> {
-    let obj = Object::blob_from_file(file_path)?;
+    let obj = Object::blob_from_file(file_path)
+        .with_context(|| format!("parse blob from {}", file_path.display()))?;
     let hash = obj.write_to_objects()?;
     Ok(hash)
 }
 
-fn generate_tree_object(file_path: &&Path, mut buf: impl Write) -> anyhow::Result<()> {
-    let mut dir = fs::read_dir(file_path)?;
+fn generate_tree_object(file_path: &Path, mut buf: impl Write) -> anyhow::Result<()> {
+    let mut dir =
+        fs::read_dir(&file_path).with_context(|| format!("read {}", file_path.display()))?;
     let mut entries = Vec::new();
     while let Some(res) = dir.next() {
-        let res = res?;
+        let res = res.context("incorrect dir entry")?;
         let file_name = res.file_name();
         let name = file_name
             .to_str()
             .ok_or(anyhow!("error: file path is broken"))?;
-        let meta = res.metadata()?;
+        let meta = res.metadata().context("get path entry metadata")?;
         let path = res.path();
 
         if is_path_ignored(name) {

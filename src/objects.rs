@@ -1,5 +1,5 @@
 use crate::utils::from_bytes_with_nul;
-use anyhow::bail;
+use anyhow::{bail, Context};
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
@@ -60,10 +60,12 @@ pub struct Object<R> {
 
 impl Object<()> {
     pub fn blob_from_file(file_name: &Path) -> anyhow::Result<Object<impl Read>> {
-        let file_stat = fs::metadata(file_name)?;
+        let file_stat =
+            fs::metadata(file_name).with_context(|| format!("stat {}", file_name.display()))?;
         let size = file_stat.len();
 
-        let file = fs::File::open(file_name)?;
+        let file =
+            fs::File::open(file_name).with_context(|| format!("open {}", file_name.display()))?;
 
         return Ok(Object {
             kind: ObjectKind::Blob,
@@ -74,24 +76,26 @@ impl Object<()> {
 
     pub fn read_from_objects(hash: &str) -> anyhow::Result<Object<impl BufRead>> {
         if hash.len() != 40 {
-            bail!("incorrect object hash");
+            bail!("incorrect object hash {hash}");
         }
 
         let path = get_object_path(hash);
-        let file = fs::File::open(path)?;
+        let file = fs::File::open(&path).with_context(|| format!("open {}", path.display()))?;
 
         let d = ZlibDecoder::new(file);
         let mut r = BufReader::new(d);
         let mut buf = Vec::new();
-        r.read_until(0x00, &mut buf)?;
+        r.read_until(0x00, &mut buf).context("read object header")?;
 
         let head = from_bytes_with_nul(&buf)?;
         let Some((kind, size)) = head.split_once(' ') else {
-            bail!("object head signature is incorrect")
+            bail!(".git/objects file head signature is incorrect '{head}'")
         };
 
         let kind = ObjectKind::from_str(kind)?;
-        let size = size.parse::<u64>()?;
+        let size = size
+            .parse::<u64>()
+            .with_context(|| format!(".git/objects file head has invalid size {size}"))?;
         let r = r.take(size);
 
         Ok(Object {
@@ -107,7 +111,8 @@ impl<R: Read> Object<R> {
         let mut object_writer = ObjectWriter::new(writer);
 
         write!(object_writer, "{} {}\0", self.kind, self.size)?;
-        io::copy(&mut self.reader, &mut object_writer)?;
+        io::copy(&mut self.reader, &mut object_writer)
+            .context("stream object content into writer")?;
 
         let hash = object_writer.finalize();
         object_writer.writer.finish()?;
@@ -117,11 +122,15 @@ impl<R: Read> Object<R> {
 
     pub fn write_to_objects(self) -> anyhow::Result<ObjectHash> {
         let mut buf = Vec::new();
-        let hash = self.write(&mut buf)?;
+        let hash = self
+            .write(&mut buf)
+            .context("stream object content into in-memory buffer")?;
         let hash_hex = hex::encode(&hash);
 
-        fs::create_dir_all(get_object_dir_path(&hash_hex))?;
-        fs::write(get_object_path(&hash_hex), buf)?;
+        fs::create_dir_all(get_object_dir_path(&hash_hex))
+            .context("create .git/objects directory")?;
+        fs::write(get_object_path(&hash_hex), buf)
+            .context("stream object from in-memory buffer to .git/object blob")?;
 
         Ok(hash)
     }
