@@ -1,5 +1,5 @@
 use anyhow::Context;
-use std::{fs, io};
+use std::fs;
 
 pub fn handle() -> anyhow::Result<()> {
     fs::create_dir(".git").context("create .git dir")?;
