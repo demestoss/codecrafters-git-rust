@@ -51,8 +51,10 @@ fn generate_tree_object(file_path: &&Path, mut buf: impl Write) -> anyhow::Resul
             continue;
         }
 
+        let mode = get_mode(meta);
+
         entries.push(TreeEntry {
-            meta,
+            mode,
             name: name.to_owned(),
             path,
         })
@@ -60,8 +62,8 @@ fn generate_tree_object(file_path: &&Path, mut buf: impl Write) -> anyhow::Resul
 
     entries.sort_by(|x, y| x.name.cmp(&y.name));
 
-    for TreeEntry { meta, name, path } in entries {
-        let is_dir = meta.is_dir();
+    for TreeEntry { mode, name, path } in entries {
+        let is_dir = mode == "40000";
 
         let hash = if is_dir {
             let Ok(hash) = write_tree(&path) else {
@@ -71,7 +73,6 @@ fn generate_tree_object(file_path: &&Path, mut buf: impl Write) -> anyhow::Resul
         } else {
             write_blob(&path)?
         };
-        let mode = get_mode(meta);
 
         write!(buf, "{mode} {name}\0")?;
         buf.write(&hash)?;
@@ -82,7 +83,7 @@ fn generate_tree_object(file_path: &&Path, mut buf: impl Write) -> anyhow::Resul
 
 struct TreeEntry {
     name: String,
-    meta: Metadata,
+    mode: String,
     path: PathBuf,
 }
 
