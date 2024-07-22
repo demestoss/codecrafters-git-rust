@@ -5,11 +5,11 @@ use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use sha1::{Digest, Sha1};
 use std::fmt::{Display, Formatter};
-use std::fs;
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::{fs, io};
 
 pub fn get_object_dir_path(hash: &str) -> PathBuf {
     Path::new(".git/objects").join(&hash[..2]).to_owned()
@@ -50,6 +50,8 @@ impl Display for ObjectKind {
     }
 }
 
+pub type ObjectHash = [u8; 20];
+
 pub struct Object<R> {
     pub kind: ObjectKind,
     pub size: u64,
@@ -57,7 +59,20 @@ pub struct Object<R> {
 }
 
 impl Object<()> {
-    pub fn read(hash: &str) -> anyhow::Result<Object<impl BufRead>> {
+    pub fn blob_from_file(file_name: &Path) -> anyhow::Result<Object<impl Read>> {
+        let file_stat = fs::metadata(file_name)?;
+        let size = file_stat.len();
+
+        let file = fs::File::open(file_name)?;
+
+        return Ok(Object {
+            kind: ObjectKind::Blob,
+            size,
+            reader: file,
+        });
+    }
+
+    pub fn read_from_objects(hash: &str) -> anyhow::Result<Object<impl BufRead>> {
         if hash.len() != 40 {
             bail!("incorrect object hash");
         }
@@ -87,6 +102,31 @@ impl Object<()> {
     }
 }
 
+impl<R: Read> Object<R> {
+    pub fn write(mut self, writer: impl Write) -> anyhow::Result<ObjectHash> {
+        let mut object_writer = ObjectWriter::new(writer);
+
+        write!(object_writer, "{} {}\0", self.kind, self.size)?;
+        io::copy(&mut self.reader, &mut object_writer)?;
+
+        let hash = object_writer.finalize();
+        object_writer.writer.finish()?;
+
+        Ok(hash)
+    }
+
+    pub fn write_to_objects(self) -> anyhow::Result<ObjectHash> {
+        let mut buf = Vec::new();
+        let hash = self.write(&mut buf)?;
+        let hash_hex = hex::encode(&hash);
+
+        fs::create_dir_all(get_object_dir_path(&hash_hex))?;
+        fs::write(get_object_path(&hash_hex), buf)?;
+
+        Ok(hash)
+    }
+}
+
 pub struct ObjectWriter<W: Write> {
     hasher: Sha1,
     writer: ZlibEncoder<W>,
@@ -99,9 +139,9 @@ impl<W: Write> ObjectWriter<W> {
         ObjectWriter { writer, hasher }
     }
 
-    pub fn finalize(&mut self) -> anyhow::Result<String> {
+    pub fn finalize(&mut self) -> ObjectHash {
         let output = self.hasher.finalize_reset();
-        Ok(hex::encode(output))
+        output.into()
     }
 }
 

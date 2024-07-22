@@ -11,7 +11,7 @@ pub struct CatObjectFlags {
 }
 
 pub fn handle(object_hash: &str, flags: CatObjectFlags) -> anyhow::Result<()> {
-    let mut object = Object::read(object_hash)?;
+    let mut object = Object::read_from_objects(object_hash)?;
 
     match flags {
         CatObjectFlags {

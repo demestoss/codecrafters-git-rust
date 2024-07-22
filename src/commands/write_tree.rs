@@ -1,32 +1,31 @@
-use crate::commands::hash_object::{generate_blob_object, write_git_object};
-use crate::objects::ObjectWriter;
+use crate::objects::{Object, ObjectHash, ObjectKind};
 use anyhow::anyhow;
+use std::fs;
 use std::fs::Metadata;
 use std::io::prelude::*;
 use std::io::Cursor;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::{fs, io};
 
 pub fn handle() -> anyhow::Result<()> {
     let root = Path::new("./");
     let hash = write_tree(&root)?;
+    let hash = hex::encode(hash);
     println!("{hash}");
     Ok(())
 }
 
-fn write_tree(file_path: &Path) -> anyhow::Result<String> {
+fn write_tree(file_path: &Path) -> anyhow::Result<ObjectHash> {
     let mut buf = Vec::new();
     generate_tree_object(&file_path, &mut buf)?;
-    let size = buf.len();
 
-    let mut object_writer = ObjectWriter::new(&mut buf);
-    write!(object_writer, "tree {size}\0")?;
-    io::copy(&mut Cursor::new(buf), &mut object_writer)?;
+    let object = Object {
+        kind: ObjectKind::Tree,
+        size: buf.len() as u64,
+        reader: Cursor::new(buf),
+    };
 
-    let hash = object_writer.finalize()?;
-    write_git_object(&hash, &buf)?;
-
+    let hash = object.write_to_objects()?;
     Ok(hash)
 }
 
@@ -53,16 +52,14 @@ fn generate_tree_object(file_path: &&Path, mut buf: impl Write) -> anyhow::Resul
         let mode = get_mode(meta);
 
         write!(buf, "{mode} {name}\0")?;
-        let hash = hex::decode(hash)?;
         buf.write(&hash)?;
     }
     Ok(())
 }
 
-fn write_blob(file_path: &Path) -> anyhow::Result<String> {
-    let mut buf = Vec::new();
-    let hash = generate_blob_object(file_path, &mut buf)?;
-    write_git_object(&hash, &buf)?;
+fn write_blob(file_path: &Path) -> anyhow::Result<ObjectHash> {
+    let obj = Object::blob_from_file(file_path)?;
+    let hash = obj.write_to_objects()?;
     Ok(hash)
 }
 

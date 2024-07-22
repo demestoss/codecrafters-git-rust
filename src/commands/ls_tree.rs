@@ -1,11 +1,11 @@
-use crate::objects::{Object, ObjectKind};
+use crate::objects::{Object, ObjectHash, ObjectKind};
 use crate::utils::from_bytes_with_nul;
 use anyhow::bail;
 use std::fmt::{Display, Formatter};
 use std::io::prelude::*;
 
 pub fn handle(object_hash: &str, name_only: bool) -> anyhow::Result<()> {
-    let mut object = Object::read(object_hash)?;
+    let mut object = Object::read_from_objects(object_hash)?;
 
     match (object.kind, name_only) {
         (ObjectKind::Tree, true) => {
@@ -29,16 +29,15 @@ pub fn handle(object_hash: &str, name_only: bool) -> anyhow::Result<()> {
 pub(crate) struct TreeObjectItem {
     mode: String,
     name: String,
-    hash: String,
+    hash: ObjectHash,
     kind: ObjectKind,
 }
 
 impl TreeObjectItem {
     pub(crate) fn read(reader: &mut impl BufRead) -> anyhow::Result<TreeObjectItem> {
-        let TreeObjectItemRaw { mode, name, sha } = TreeObjectItemRaw::read(reader)?;
-        let hash = hex::encode(&sha);
+        let TreeObjectItemRaw { mode, name, hash } = TreeObjectItemRaw::read(reader)?;
 
-        let object = Object::read(&hash)?;
+        let object = Object::read_from_objects(&hex::encode(&hash))?;
 
         Ok(TreeObjectItem {
             mode,
@@ -62,14 +61,15 @@ impl Display for TreeObjectItem {
             hash,
             kind,
         } = self;
-        write!(f, "{mode:0>6} {kind} {hash}    {name}")
+        let hash_hex = hex::encode(hash);
+        write!(f, "{mode:0>6} {kind} {hash_hex}    {name}")
     }
 }
 
 struct TreeObjectItemRaw {
     mode: String,
     name: String,
-    sha: Vec<u8>,
+    hash: ObjectHash,
 }
 
 impl TreeObjectItemRaw {
@@ -82,11 +82,11 @@ impl TreeObjectItemRaw {
             bail!("tree item head signature is incorrect")
         };
 
-        let mut sha = [0; 20];
-        reader.read_exact(&mut sha)?;
+        let mut hash = [0; 20];
+        reader.read_exact(&mut hash)?;
 
         Ok(Self {
-            sha: Vec::from(sha),
+            hash,
             name: name.to_owned(),
             mode: mode.to_owned(),
         })
