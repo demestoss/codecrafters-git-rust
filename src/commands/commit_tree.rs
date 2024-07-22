@@ -1,0 +1,69 @@
+use crate::objects::{Object, ObjectKind};
+use anyhow::bail;
+use std::io::{Cursor, Write};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+pub fn handle(
+    tree_hash: String,
+    parent_hash: Option<String>,
+    message: String,
+) -> anyhow::Result<()> {
+    if Object::read_from_objects(&tree_hash)?.kind != ObjectKind::Tree {
+        bail!("error: provided hash is not associated with a tree object")
+    }
+    if let Some(parent_hash) = &parent_hash {
+        if Object::read_from_objects(parent_hash)?.kind != ObjectKind::Commit {
+            bail!("error: parent hash is not associated with a commit object")
+        }
+    }
+
+    let mut buf = Vec::new();
+    generate_commit_object(tree_hash, parent_hash, message, &mut buf)?;
+
+    let object = Object {
+        kind: ObjectKind::Commit,
+        size: buf.len() as u64,
+        reader: Cursor::new(buf),
+    };
+
+    let hash = object.write_to_objects()?;
+    let hex_hash = hex::encode(hash);
+
+    println!("{hex_hash}");
+
+    Ok(())
+}
+
+fn generate_commit_object(
+    tree_hash: String,
+    parent_hash: Option<String>,
+    message: String,
+    mut buf: impl Write,
+) -> anyhow::Result<()> {
+    writeln!(buf, "tree {tree_hash}")?;
+
+    if let Some(parent_hash) = parent_hash {
+        writeln!(buf, "parent {parent_hash}")?;
+    }
+
+    let (author, email) = get_git_author();
+    let current_time = SystemTime::now();
+    let timestamp = current_time
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_secs();
+    let timezone = "+0200";
+
+    writeln!(buf, "author {author} <{email}> {timestamp} {timezone}",)?;
+    writeln!(buf, "committer {author} <{email}> {timestamp} {timezone}",)?;
+    writeln!(buf)?;
+    writeln!(buf, "{message}")?;
+
+    Ok(())
+}
+
+fn get_git_author() -> (String, String) {
+    let author_name = "Dmitriy Popov";
+    let author_email = "me@demestoss.com";
+    (author_name.to_owned(), author_email.to_owned())
+}

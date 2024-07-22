@@ -3,7 +3,7 @@ mod objects;
 mod utils;
 
 use crate::commands::cat_file::CatObjectFlags;
-use crate::commands::{cat_file, hash_object, init, ls_tree, write_tree};
+use crate::commands::{cat_file, commit_tree, hash_object, init, ls_tree, write_tree};
 use clap::{ArgGroup, Parser, Subcommand};
 use std::env;
 use std::path::PathBuf;
@@ -44,6 +44,14 @@ enum Command {
         object_hash: String,
     },
     WriteTree,
+    CommitTree {
+        #[clap(short = 'p', long = "parent")]
+        parent_hash: Option<String>,
+        #[clap(short = 'm', long = "message")]
+        commit_message: String,
+
+        tree_hash: String,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -77,6 +85,11 @@ fn process(args: &[String]) -> anyhow::Result<()> {
             object_hash,
         } => ls_tree::handle(&object_hash, name_only)?,
         Command::WriteTree => write_tree::handle()?,
+        Command::CommitTree {
+            tree_hash,
+            parent_hash,
+            commit_message,
+        } => commit_tree::handle(tree_hash, parent_hash, commit_message)?,
     };
     Ok(())
 }

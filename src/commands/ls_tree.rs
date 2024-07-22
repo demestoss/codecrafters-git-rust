@@ -7,22 +7,48 @@ use std::io::prelude::*;
 pub fn handle(object_hash: &str, name_only: bool) -> anyhow::Result<()> {
     let mut object = Object::read_from_objects(object_hash)?;
 
-    match (object.kind, name_only) {
-        (ObjectKind::Tree, true) => {
-            while !object.reader.fill_buf()?.is_empty() {
-                let name = TreeObjectItem::read_name(&mut object.reader)?;
-                println!("{name}");
-            }
+    match object.kind {
+        ObjectKind::Tree => {
+            display_tree(&mut object, name_only)?;
         }
-        (ObjectKind::Tree, false) => {
-            while !object.reader.fill_buf()?.is_empty() {
-                let item = TreeObjectItem::read(&mut object.reader)?;
-                println!("{item}");
-            }
+        ObjectKind::Commit => {
+            let mut buf = String::new();
+            object.reader.read_line(&mut buf)?;
+
+            let Some((_, tree_hash)) = buf.split_once(' ') else {
+                bail!("error: commit file signature is incorrect")
+            };
+
+            let mut object = Object::read_from_objects(tree_hash)?;
+            display_tree(&mut object, name_only)?;
         }
         _ => println!("error: not a tree object"),
     }
 
+    Ok(())
+}
+
+fn display_tree<R: BufRead>(object: &mut Object<R>, name_only: bool) -> anyhow::Result<()> {
+    if name_only {
+        display_name_only_tree(object)
+    } else {
+        display_full_tree(object)
+    }
+}
+
+fn display_name_only_tree<R: BufRead>(object: &mut Object<R>) -> anyhow::Result<()> {
+    while !object.reader.fill_buf()?.is_empty() {
+        let name = TreeObjectItem::read_name(&mut object.reader)?;
+        println!("{name}");
+    }
+    Ok(())
+}
+
+fn display_full_tree<R: BufRead>(object: &mut Object<R>) -> anyhow::Result<()> {
+    while !object.reader.fill_buf()?.is_empty() {
+        let item = TreeObjectItem::read(&mut object.reader)?;
+        println!("{item}");
+    }
     Ok(())
 }
 

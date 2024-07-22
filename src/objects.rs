@@ -20,7 +20,7 @@ pub fn get_object_path(hash: &str) -> PathBuf {
     dir.join(&hash[2..])
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ObjectKind {
     Blob,
     Tree,
