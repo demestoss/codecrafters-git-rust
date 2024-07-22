@@ -18,7 +18,7 @@ struct Args {
 #[derive(Debug, Subcommand)]
 enum Command {
     Init,
-    #[clap(group(ArgGroup::new("info").required(true).args(&["object_content", "object_exists", "object_type", "object_size"])))]
+    #[clap(group(ArgGroup::new("info").required(true).args(&["pretty_print", "object_exists", "object_type", "object_size"])))]
     CatFile {
         #[clap(short = 'p')]
         pretty_print: bool,

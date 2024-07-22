@@ -1,6 +1,5 @@
 use crate::objects::{Object, ObjectHash, ObjectKind};
 use anyhow::anyhow;
-use std::ffi::OsString;
 use std::fs;
 use std::fs::Metadata;
 use std::io::prelude::*;
