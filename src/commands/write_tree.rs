@@ -1,11 +1,12 @@
 use crate::objects::{Object, ObjectHash, ObjectKind};
 use anyhow::anyhow;
+use std::ffi::OsString;
 use std::fs;
 use std::fs::Metadata;
 use std::io::prelude::*;
 use std::io::Cursor;
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub fn handle() -> anyhow::Result<()> {
     let root = Path::new("./");
@@ -29,8 +30,15 @@ fn write_tree(file_path: &Path) -> anyhow::Result<ObjectHash> {
     Ok(hash)
 }
 
+fn write_blob(file_path: &Path) -> anyhow::Result<ObjectHash> {
+    let obj = Object::blob_from_file(file_path)?;
+    let hash = obj.write_to_objects()?;
+    Ok(hash)
+}
+
 fn generate_tree_object(file_path: &&Path, mut buf: impl Write) -> anyhow::Result<()> {
     let mut dir = fs::read_dir(file_path)?;
+    let mut entries = Vec::new();
     while let Some(res) = dir.next() {
         let res = res?;
         let file_name = res.file_name();
@@ -44,8 +52,23 @@ fn generate_tree_object(file_path: &&Path, mut buf: impl Write) -> anyhow::Resul
             continue;
         }
 
-        let hash = if meta.is_dir() {
-            write_tree(&path)?
+        entries.push(TreeEntry {
+            meta,
+            name: name.to_owned(),
+            path,
+        })
+    }
+
+    entries.sort_by(|x, y| x.name.cmp(&y.name));
+
+    for TreeEntry { meta, name, path } in entries {
+        let is_dir = meta.is_dir();
+
+        let hash = if is_dir {
+            let Ok(hash) = write_tree(&path) else {
+                continue;
+            };
+            hash
         } else {
             write_blob(&path)?
         };
@@ -54,13 +77,14 @@ fn generate_tree_object(file_path: &&Path, mut buf: impl Write) -> anyhow::Resul
         write!(buf, "{mode} {name}\0")?;
         buf.write(&hash)?;
     }
+
     Ok(())
 }
 
-fn write_blob(file_path: &Path) -> anyhow::Result<ObjectHash> {
-    let obj = Object::blob_from_file(file_path)?;
-    let hash = obj.write_to_objects()?;
-    Ok(hash)
+struct TreeEntry {
+    name: String,
+    meta: Metadata,
+    path: PathBuf,
 }
 
 fn get_mode(meta: Metadata) -> String {
