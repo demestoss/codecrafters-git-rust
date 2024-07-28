@@ -129,8 +129,12 @@ impl<R: Read> Object<R> {
 
         fs::create_dir_all(get_object_dir_path(&hash_hex))
             .context("create .git/objects directory")?;
-        fs::write(get_object_path(&hash_hex), buf)
-            .context("stream object from in-memory buffer to .git/object blob")?;
+        fs::write(get_object_path(&hash_hex), buf).with_context(|| {
+            format!(
+                "stream object from in-memory buffer to .git/object blob {}",
+                get_object_path(&hash_hex).display()
+            )
+        })?;
 
         Ok(hash)
     }
