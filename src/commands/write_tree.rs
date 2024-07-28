@@ -1,5 +1,5 @@
 use crate::objects::{Object, ObjectHash, ObjectKind};
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, bail, Context};
 use std::fs;
 use std::fs::Metadata;
 use std::io::prelude::*;
@@ -9,26 +9,32 @@ use std::path::{Path, PathBuf};
 
 pub fn handle() -> anyhow::Result<()> {
     let root = Path::new("./");
-    let hash = write_tree(&root)?;
+    let Some(hash) = write_tree_for(&root)? else {
+        bail!("do not write empty tree")
+    };
     let hash = hex::encode(hash);
     println!("{hash}");
     Ok(())
 }
 
-fn write_tree(file_path: &Path) -> anyhow::Result<ObjectHash> {
+pub fn write_tree_for(file_path: &Path) -> anyhow::Result<Option<ObjectHash>> {
     let mut buf = Vec::new();
     generate_tree_object(&file_path, &mut buf)?;
 
-    let object = Object {
-        kind: ObjectKind::Tree,
-        size: buf.len() as u64,
-        reader: Cursor::new(buf),
-    };
-
-    let hash = object
-        .write_to_objects()
-        .context("write to .git/objects dir")?;
-    Ok(hash)
+    if buf.is_empty() {
+        Ok(None)
+    } else {
+        let object = Object {
+            kind: ObjectKind::Tree,
+            size: buf.len() as u64,
+            reader: Cursor::new(buf),
+        };
+        Ok(Some(
+            object
+                .write_to_objects()
+                .context("write to .git/objects dir")?,
+        ))
+    }
 }
 
 fn write_blob(file_path: &Path) -> anyhow::Result<ObjectHash> {
@@ -70,7 +76,7 @@ fn generate_tree_object(file_path: &Path, mut buf: impl Write) -> anyhow::Result
         let is_dir = mode == "40000";
 
         let hash = if is_dir {
-            let Ok(hash) = write_tree(&path) else {
+            let Ok(hash) = write_tree_for(&path) else {
                 continue;
             };
             hash

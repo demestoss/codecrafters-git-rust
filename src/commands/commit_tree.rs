@@ -1,4 +1,4 @@
-use crate::objects::{Object, ObjectKind};
+use crate::objects::{Object, ObjectHash, ObjectKind};
 use anyhow::{bail, Context};
 use std::io::{Cursor, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -8,6 +8,20 @@ pub fn handle(
     parent_hash: Option<String>,
     message: String,
 ) -> anyhow::Result<()> {
+    let hash = write_commit(&tree_hash, parent_hash.as_deref(), &message)
+        .context("create commit object")?;
+    let hex_hash = hex::encode(hash);
+
+    println!("{hex_hash}");
+
+    Ok(())
+}
+
+pub fn write_commit(
+    tree_hash: &str,
+    parent_hash: Option<&str>,
+    message: &str,
+) -> anyhow::Result<ObjectHash> {
     if Object::read_from_objects(&tree_hash)?.kind != ObjectKind::Tree {
         bail!("error: provided hash is not associated with a tree object")
     }
@@ -27,20 +41,15 @@ pub fn handle(
         reader: Cursor::new(buf),
     };
 
-    let hash = object
+    object
         .write_to_objects()
-        .context("write .git/objects commit blob")?;
-    let hex_hash = hex::encode(hash);
-
-    println!("{hex_hash}");
-
-    Ok(())
+        .context("write .git/objects commit blob")
 }
 
 fn generate_commit_object(
-    tree_hash: String,
-    parent_hash: Option<String>,
-    message: String,
+    tree_hash: &str,
+    parent_hash: Option<&str>,
+    message: &str,
     mut buf: impl Write,
 ) -> anyhow::Result<()> {
     writeln!(buf, "tree {tree_hash}")?;
