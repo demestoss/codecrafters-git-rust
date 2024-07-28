@@ -1,5 +1,6 @@
 use crate::objects::{Object, ObjectHash, ObjectKind};
-use anyhow::{bail, Context};
+use anyhow::{anyhow, bail, Context};
+use std::env;
 use std::io::{Cursor, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -58,9 +59,8 @@ fn generate_commit_object(
         writeln!(buf, "parent {parent_hash}")?;
     }
 
-    let (author, email) = get_git_author();
-    let current_time = SystemTime::now();
-    let timestamp = current_time
+    let (author, email) = get_git_author()?;
+    let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("Time went backwards")
         .as_secs();
@@ -74,8 +74,19 @@ fn generate_commit_object(
     Ok(())
 }
 
-fn get_git_author() -> (String, String) {
-    let author_name = "Dmitriy Popov";
-    let author_email = "me@demestoss.com";
-    (author_name.to_owned(), author_email.to_owned())
+fn get_git_author() -> anyhow::Result<(String, String)> {
+    let values = if let (Some(name), Some(email)) = (env::var_os("NAME"), env::var_os("EMAIL")) {
+        let name = name
+            .into_string()
+            .map_err(|_| anyhow!("$NAME is invalid utf-8"))?;
+        let email = email
+            .into_string()
+            .map_err(|_| anyhow!("$EMAIL is invalid utf-8"))?;
+        (name, email)
+    } else {
+        let author_name = "Dmitriy Popov";
+        let author_email = "me@demestoss.com";
+        (author_name.to_owned(), author_email.to_owned())
+    };
+    Ok(values)
 }
