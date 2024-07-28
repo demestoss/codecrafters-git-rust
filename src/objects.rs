@@ -121,17 +121,17 @@ impl<R: Read> Object<R> {
     }
 
     pub fn write_to_objects(self) -> anyhow::Result<ObjectHash> {
-        let mut buf = Vec::new();
+        let tmp = "temporary";
         let hash = self
-            .write(&mut buf)
+            .write(fs::File::create(tmp).context("construct temporary file for tree")?)
             .context("stream object content into in-memory buffer")?;
         let hash_hex = hex::encode(&hash);
 
         fs::create_dir_all(get_object_dir_path(&hash_hex))
             .context("create .git/objects directory")?;
-        fs::write(get_object_path(&hash_hex), buf).with_context(|| {
+        fs::rename(tmp, get_object_path(&hash_hex)).with_context(|| {
             format!(
-                "stream object from in-memory buffer to .git/object blob {}",
+                "stream object from tmp file to .git/object blob {}",
                 get_object_path(&hash_hex).display()
             )
         })?;
