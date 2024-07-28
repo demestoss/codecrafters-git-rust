@@ -81,11 +81,13 @@ fn generate_tree_object(file_path: &Path, mut buf: impl Write) -> anyhow::Result
             };
             hash
         } else {
-            write_blob(&path)?
+            Some(write_blob(&path)?)
         };
 
-        write!(buf, "{mode} {name}\0")?;
-        buf.write(&hash)?;
+        if let Some(hash) = hash {
+            write!(buf, "{mode} {name}\0")?;
+            buf.write(&hash)?;
+        }
     }
 
     Ok(())

@@ -1,7 +1,6 @@
 use crate::commands::cat_file::CatObjectFlags;
 use anyhow::{bail, Context};
 use clap::{ArgGroup, Parser, Subcommand};
-use std::fmt::format;
 use std::path::{Path, PathBuf};
 use std::{env, fs};
 
